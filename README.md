@@ -24,6 +24,12 @@ npm run dev
 
 Open the local URL printed by Vite. Expand **Developer chat simulator** at the bottom to run a real `beforePrompt` hook without an AI request or Chub account. The simulator is excluded from the production application.
 
+### Test inside a Chub chat
+
+Run `npm run dev:staging` and keep it running. In Chub's **Staging URL (Developer Setting)**, enter `http://localhost:5173`, then refresh the chat. Use the same computer as the running server. A GitHub repository URL is source code, not a running stage, and cannot go in this field. Clear the field and refresh to return to chatting without the local stage.
+
+The standard development server also selects the live Chub runner automatically when embedded in an iframe. Opening it directly still shows the standalone simulator. The dice panel should appear in Chub without the developer chat simulator.
+
 The upstream Chub SDK declares Node 21.7.1 as its exact engine, so npm may print an engine warning on newer Node versions. This project is verified on Node 24 and its workflow uses Node 22. Do not enable `engine-strict` for this SDK.
 
 ## Use in chat
