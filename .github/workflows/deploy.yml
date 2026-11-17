@@ -1,0 +1,63 @@
+name: Build and deploy Chub stage
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: chub-stage-deploy
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CHUB_AUTH_TOKEN: ${{ secrets.CHUB_AUTH_TOKEN }}
+      STAGE_ID: ${{ secrets.STAGE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - name: Register stage if needed
+        if: env.CHUB_AUTH_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$STAGE_ID" ]; then
+            STAGE_ID=$(sed -n "s/^extension_id: *['\"]*\([^'\" ]*\).*/\1/p" public/chub_meta.yaml)
+          fi
+          if [ -z "$STAGE_ID" ]; then
+            jq -n --arg name "Fate & Fortune — Dice Roller" '{name: $name}' > /tmp/stage-request.json
+            curl --fail-with-body --silent --show-error -H "CH-API-KEY: $CHUB_AUTH_TOKEN" -H 'Content-Type: application/json' --data @/tmp/stage-request.json https://api.chub.ai/extensions -o /tmp/stage-response.json
+            STAGE_ID=$(jq -er '.id_v2 | select(type == "string" and length > 0)' /tmp/stage-response.json)
+            printf '\nextension_id: "%s"\n' "$STAGE_ID" >> public/chub_meta.yaml
+          fi
+          if ! grep -q '^github_path:' public/chub_meta.yaml; then
+            printf '\ngithub_path: "https://github.com/%s"\n' "$GITHUB_REPOSITORY" >> public/chub_meta.yaml
+          fi
+          git config user.email 'action@github.com'
+          git config user.name 'GitHub Action'
+          git add public/chub_meta.yaml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Record Chub stage metadata [skip ci]'
+            git push
+          fi
+          echo "STAGE_ID=$STAGE_ID" >> "$GITHUB_ENV"
+          cp public/chub_meta.yaml dist/chub_meta.yaml
+      - name: Package stage
+        run: cd dist && zip -r ../build.zip .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fate-and-fortune-chub-stage
+          path: build.zip
+      - name: Upload to Chub
+        if: env.CHUB_AUTH_TOKEN != ''
+        run: |
+          curl --fail-with-body --silent --show-error -H "CH-API-KEY: $CHUB_AUTH_TOKEN" -F 'file=@build.zip' "https://api.chub.ai/extension/$STAGE_ID/upload"
+      - name: Deployment setup notice
+        if: env.CHUB_AUTH_TOKEN == ''
+        run: echo 'Build is ready. Add the CHUB_AUTH_TOKEN repository secret to enable Chub deployment.'

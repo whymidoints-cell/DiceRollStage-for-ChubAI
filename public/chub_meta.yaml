@@ -1,0 +1,21 @@
+project_name: 'Fate & Fortune — Dice Roller'
+tagline: 'Visual dice, honest rolls, and a little more adventure in every chat.'
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags:
+  - Dice
+  - RPG
+  - Tools
+config_schema:
+  type: object
+  properties:
+    defaultExpression:
+      type: string
+      title: Default dice expression
+      default: '1d20'
+      maxLength: 120
+    shareWithChat:
+      type: boolean
+      title: Queue panel rolls for the next chat message by default
+      default: true
+  additionalProperties: false
