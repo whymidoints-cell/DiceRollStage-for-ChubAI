@@ -31,8 +31,20 @@ jobs:
             STAGE_ID=$(sed -n "s/^extension_id: *['\"]*\([^'\" ]*\).*/\1/p" public/chub_meta.yaml)
           fi
           if [ -z "$STAGE_ID" ]; then
-            jq -n --arg name "Fate & Fortune — Dice Roller" '{name: $name}' > /tmp/stage-request.json
-            curl --fail-with-body --silent --show-error -H "CH-API-KEY: $CHUB_AUTH_TOKEN" -H 'Content-Type: application/json' --data @/tmp/stage-request.json https://api.chub.ai/extensions -o /tmp/stage-response.json
+            jq -n --arg name "${GITHUB_REPOSITORY#*/}" '{name: $name}' > /tmp/stage-request.json
+            status=$(curl --silent --show-error -w '%{http_code}' -H "CH-API-KEY: $CHUB_AUTH_TOKEN" -H 'Content-Type: application/json' --data @/tmp/stage-request.json https://api.chub.ai/extensions -o /tmp/stage-response.json)
+            if [[ "$status" != 2* ]]; then
+              echo "::error::Chub registration failed (HTTP $status)."
+              if jq -e . /tmp/stage-response.json >/dev/null 2>&1; then
+                detail=$(jq -c '{detail, message, error}' /tmp/stage-response.json | head -c 1200)
+                echo "::error::Chub response: $detail"
+              elif grep -qi 'cloudflare' /tmp/stage-response.json; then
+                echo '::error::Chub returned a Cloudflare security page instead of an API response.'
+              else
+                echo '::error::Chub returned a non-JSON error response.'
+              fi
+              exit 1
+            fi
             STAGE_ID=$(jq -er '.id_v2 | select(type == "string" and length > 0)' /tmp/stage-response.json)
             printf '\nextension_id: "%s"\n' "$STAGE_ID" >> public/chub_meta.yaml
           fi
